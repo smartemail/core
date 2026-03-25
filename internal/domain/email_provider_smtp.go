@@ -1,9 +1,11 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Notifuse/notifuse/pkg/crypto"
+	"github.com/wneessen/go-mail"
 )
 
 // SMTPWebhookPayload represents an SMTP webhook payload
@@ -207,4 +209,13 @@ func (s *SMTPSettings) validateOAuth2(passphrase string) error {
 	}
 
 	return nil
+}
+
+type SMTPClientFactory interface {
+	CreateClient(host string, port int, username, password string, useTLS bool) (*mail.Client, error)
+}
+
+// SMTPService is an interface for SMTP email sending service
+type SMTPService interface {
+	SendEmail(ctx context.Context, workspaceID string, fromAddress, fromName, to, subject, content string, provider *EmailProvider) error
 }

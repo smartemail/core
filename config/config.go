@@ -14,28 +14,35 @@ import (
 	"github.com/spf13/viper"
 )
 
-const VERSION = "28.3"
+const VERSION = "43.0"
 
 type Config struct {
-	Server              ServerConfig
-	Database            DatabaseConfig
-	Security            SecurityConfig
-	Tracing             TracingConfig
-	SMTP                SMTPConfig
-	SMTPRelay           SMTPRelayConfig
-	Demo                DemoConfig
-	Broadcast           BroadcastConfig
-	TaskScheduler       TaskSchedulerConfig
-	AutomationScheduler AutomationSchedulerConfig
-	Telemetry           bool
-	CheckForUpdates     bool
-	RootEmail           string
-	Environment         string
-	APIEndpoint         string
-	WebhookEndpoint     string
-	LogLevel            string
-	Version             string
-	IsInstalled         bool // NEW: Indicates if setup wizard has been completed
+	Server          ServerConfig
+	Database        DatabaseConfig
+	Security        SecurityConfig
+	Tracing         TracingConfig
+	SMTP            SMTPConfig
+	SMTPRelay       SMTPRelayConfig
+	Demo            DemoConfig
+	Broadcast       BroadcastConfig
+	TaskScheduler   TaskSchedulerConfig
+	Telemetry       bool
+	CheckForUpdates bool
+	RootEmail       string
+	Environment     string
+	APIEndpoint     string
+	WebhookEndpoint string
+	LogLevel        string
+	Version         string
+	IsInstalled     bool // NEW: Indicates if setup wizard has been completed
+	Google          GoogleConfig
+	Apple           AppleConfig
+	Stripe          StripeConfig
+	Azure           AzureConfig
+	AI              AiConfig
+	SERP            SERPConfig
+	ElasticEmail    ElasticEmailConfig
+	LogPath         string
 
 	// Track which values came from actual environment variables (not database, not generated)
 	EnvValues EnvValues
@@ -51,8 +58,6 @@ type EnvValues struct {
 	SMTPPassword           string
 	SMTPFromEmail          string
 	SMTPFromName           string
-	SMTPUseTLS             string // "true", "false", or "" (empty = not set, defaults to true)
-	SMTPEHLOHostname       string
 	SMTPRelayEnabled       string // "true", "false", or "" (empty = not set, allows setup wizard to configure)
 	SMTPRelayDomain        string
 	SMTPRelayPort          int
@@ -68,9 +73,10 @@ type DemoConfig struct {
 }
 
 type ServerConfig struct {
-	Port int
-	Host string
-	SSL  SSLConfig
+	Port        int
+	Host        string
+	SSL         SSLConfig
+	FrontendUrl string
 }
 
 type DatabaseConfig struct {
@@ -137,14 +143,12 @@ type TracingConfig struct {
 }
 
 type SMTPConfig struct {
-	Host         string
-	Port         int
-	Username     string
-	Password     string
-	FromEmail    string
-	FromName     string
-	UseTLS       bool
-	EHLOHostname string
+	Host      string
+	Port      int
+	Username  string
+	Password  string
+	FromEmail string
+	FromName  string
 }
 
 type SMTPRelayConfig struct {
@@ -166,15 +170,63 @@ type TaskSchedulerConfig struct {
 	MaxTasks int           // Max tasks per execution (default: 100)
 }
 
-type AutomationSchedulerConfig struct {
-	Delay     time.Duration // Delay before scheduler starts (default: 30s)
-	Interval  time.Duration // Polling interval (default: 10s)
-	BatchSize int           // Contacts per batch (default: 50)
-}
-
 // LoadOptions contains options for loading configuration
 type LoadOptions struct {
 	EnvFile string // Optional environment file to load (e.g., ".env", ".env.test")
+}
+
+type GoogleConfig struct {
+	ClientID     string
+	ClientSecret string
+	CallbackUrl  string
+	PlaceApiKey  string
+}
+
+type AppleConfig struct {
+	TeamID      string
+	KeyID       string
+	ClientID    string
+	RedirectUrl string
+	PrivateKey  string
+}
+
+type StripeConfig struct {
+	PublishableKey string
+	SecretKey      string
+	WebhookSecret  string
+}
+
+type AzureConfig struct {
+	StorageAccountName   string
+	StorageAccountKey    string
+	StorageContainerName string
+}
+
+type AiConfig struct {
+	OpenAIKey   string
+	OpenAIModel string
+
+	GeminiKey   string
+	GeminiModel string
+
+	GrokKey   string
+	GrokModel string
+
+	ClaudeKey   string
+	ClaudeModel string
+
+	PerplexityKey string
+
+	IdeogramKey string
+	RecraftKey  string
+}
+
+type SERPConfig struct {
+	SerpApiKey string
+}
+
+type ElasticEmailConfig struct {
+	APIKey string
 }
 
 // SystemSettings holds configuration loaded from database
@@ -188,8 +240,6 @@ type SystemSettings struct {
 	SMTPPassword           string
 	SMTPFromEmail          string
 	SMTPFromName           string
-	SMTPUseTLS             bool
-	SMTPEHLOHostname       string
 	TelemetryEnabled       bool
 	CheckForUpdates        bool
 	SMTPRelayEnabled       bool
@@ -240,7 +290,6 @@ func loadSystemSettings(db *sql.DB, secretKey string) (*SystemSettings, error) {
 	settings := &SystemSettings{
 		IsInstalled: false, // Default to false if not found
 		SMTPPort:    587,   // Default SMTP port
-		SMTPUseTLS:  true,  // Default to TLS enabled
 	}
 
 	// Load all settings from database
@@ -281,13 +330,6 @@ func loadSystemSettings(db *sql.DB, secretKey string) (*SystemSettings, error) {
 		}
 		settings.SMTPFromEmail = settingsMap["smtp_from_email"]
 		settings.SMTPFromName = settingsMap["smtp_from_name"]
-
-		// Load SMTP TLS setting (default to true if not set)
-		if smtpUseTLS, ok := settingsMap["smtp_use_tls"]; ok {
-			settings.SMTPUseTLS = smtpUseTLS != "false"
-		}
-
-		settings.SMTPEHLOHostname = settingsMap["smtp_ehlo_hostname"]
 
 		// Decrypt SMTP username if present
 		if encryptedUsername, ok := settingsMap["encrypted_smtp_username"]; ok && encryptedUsername != "" {
@@ -415,11 +457,6 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 	v.SetDefault("TASK_SCHEDULER_INTERVAL", "20s")
 	v.SetDefault("TASK_SCHEDULER_MAX_TASKS", 100)
 
-	// Automation scheduler defaults
-	v.SetDefault("AUTOMATION_SCHEDULER_DELAY", "30s")
-	v.SetDefault("AUTOMATION_SCHEDULER_INTERVAL", "10s")
-	v.SetDefault("AUTOMATION_SCHEDULER_BATCH_SIZE", 50)
-
 	// Load environment file if specified
 	if opts.EnvFile != "" {
 		v.SetConfigName(opts.EnvFile)
@@ -502,11 +539,6 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 
 	// Track env var values from viper (before any database fallbacks are applied)
 	// Note: These come from environment variables or .env file, not from defaults or database
-	var smtpUseTLSStr string
-	if v.IsSet("SMTP_USE_TLS") {
-		smtpUseTLSStr = v.GetString("SMTP_USE_TLS")
-	} // else: leave empty string (not set, defaults to true)
-
 	var smtpRelayEnabledStr string
 	if v.IsSet("SMTP_RELAY_ENABLED") {
 		smtpRelayEnabledStr = v.GetString("SMTP_RELAY_ENABLED")
@@ -521,8 +553,6 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		SMTPPassword:           v.GetString("SMTP_PASSWORD"),
 		SMTPFromEmail:          v.GetString("SMTP_FROM_EMAIL"),
 		SMTPFromName:           v.GetString("SMTP_FROM_NAME"),
-		SMTPUseTLS:             smtpUseTLSStr,       // "true", "false", or "" (empty = not set, defaults to true)
-		SMTPEHLOHostname:       v.GetString("SMTP_EHLO_HOSTNAME"),
 		SMTPRelayEnabled:       smtpRelayEnabledStr, // "true", "false", or "" (empty = not set)
 		SMTPRelayDomain:        v.GetString("SMTP_RELAY_DOMAIN"),
 		SMTPRelayPort:          v.GetInt("SMTP_RELAY_PORT"),
@@ -567,14 +597,12 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 
 		// SMTP settings - env vars override database
 		smtpConfig = SMTPConfig{
-			Host:         envVals.SMTPHost,
-			Port:         envVals.SMTPPort,
-			Username:     envVals.SMTPUsername,
-			Password:     envVals.SMTPPassword,
-			FromEmail:    envVals.SMTPFromEmail,
-			FromName:     envVals.SMTPFromName,
-			UseTLS:       envVals.SMTPUseTLS != "false", // Default to true unless explicitly set to false
-			EHLOHostname: envVals.SMTPEHLOHostname,
+			Host:      envVals.SMTPHost,
+			Port:      envVals.SMTPPort,
+			Username:  envVals.SMTPUsername,
+			Password:  envVals.SMTPPassword,
+			FromEmail: envVals.SMTPFromEmail,
+			FromName:  envVals.SMTPFromName,
 		}
 
 		// Use database values as fallback
@@ -601,13 +629,6 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		}
 		if smtpConfig.FromName == "" {
 			smtpConfig.FromName = "Notifuse" // Default
-		}
-		// Use database value for TLS if env var is not set
-		if envVals.SMTPUseTLS == "" {
-			smtpConfig.UseTLS = systemSettings.SMTPUseTLS
-		}
-		if smtpConfig.EHLOHostname == "" {
-			smtpConfig.EHLOHostname = systemSettings.SMTPEHLOHostname
 		}
 
 		// SMTP Relay settings - env vars override database
@@ -645,14 +666,12 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		rootEmail = envVals.RootEmail
 		apiEndpoint = envVals.APIEndpoint
 		smtpConfig = SMTPConfig{
-			Host:         envVals.SMTPHost,
-			Port:         envVals.SMTPPort,
-			Username:     envVals.SMTPUsername,
-			Password:     envVals.SMTPPassword,
-			FromEmail:    envVals.SMTPFromEmail,
-			FromName:     envVals.SMTPFromName,
-			UseTLS:       envVals.SMTPUseTLS != "false", // Default to true unless explicitly set to false
-			EHLOHostname: envVals.SMTPEHLOHostname,
+			Host:      envVals.SMTPHost,
+			Port:      envVals.SMTPPort,
+			Username:  envVals.SMTPUsername,
+			Password:  envVals.SMTPPassword,
+			FromEmail: envVals.SMTPFromEmail,
+			FromName:  envVals.SMTPFromName,
 		}
 		// Apply defaults for first-run
 		if smtpConfig.Port == 0 {
@@ -700,8 +719,57 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		checkForUpdates = v.GetBool("CHECK_FOR_UPDATES")
 	}
 
-	// Sanitize API endpoint - strip trailing slashes to prevent double-slash URL issues
-	apiEndpoint = strings.TrimRight(apiEndpoint, "/")
+	google := GoogleConfig{
+		ClientID:     v.GetString("GOOGLE_CLIENT_ID"),
+		ClientSecret: v.GetString("GOOGLE_CLIENT_SECRET"),
+		CallbackUrl:  v.GetString("GOOGLE_CALLBACK_URL"),
+		PlaceApiKey:  v.GetString("GOOGLE_PLACE_API_KEY"),
+	}
+
+	apple := AppleConfig{
+		TeamID:      v.GetString("APPLE_TEAM_ID"),
+		KeyID:       v.GetString("APPLE_KEY_ID"),
+		ClientID:    v.GetString("APPLE_CLIENT_ID"),
+		RedirectUrl: v.GetString("APPLE_REDIRECT_URL"),
+		PrivateKey:  v.GetString("APPLE_PRIVATE_KEY"),
+	}
+
+	stripe := StripeConfig{
+		PublishableKey: v.GetString("STRIPE_PUBLISHABLE_KEY"),
+		SecretKey:      v.GetString("STRIPE_SECRET_KEY"),
+		WebhookSecret:  v.GetString("STRIPE_WEBHOOK_SECRET"),
+	}
+
+	azure := AzureConfig{
+		StorageAccountName:   v.GetString("AZURE_STORAGE_ACCOUNT_NAME"),
+		StorageAccountKey:    v.GetString("AZURE_STORAGE_ACCOUNT_KEY"),
+		StorageContainerName: v.GetString("AZURE_STORAGE_CONTAINER_NAME"),
+	}
+
+	ai := AiConfig{
+		OpenAIKey: v.GetString("OPENAI_KEY"),
+		GrokKey:   v.GetString("GROK_KEY"),
+		GeminiKey: v.GetString("GEMINI_KEY"),
+		ClaudeKey: v.GetString("CLAUDE_KEY"),
+
+		OpenAIModel: v.GetString("OPENAI_MODEL"),
+		GrokModel:   v.GetString("GROK_MODEL"),
+		GeminiModel: v.GetString("GEMINI_MODEL"),
+		ClaudeModel: v.GetString("CLAUDE_MODEL"),
+
+		PerplexityKey: v.GetString("PERPLEXITY_KEY"),
+
+		IdeogramKey: v.GetString("IEDOGRAM_KEY"),
+		RecraftKey:  v.GetString("RECRAFT_KEY"),
+	}
+
+	serpConfig := SERPConfig{
+		SerpApiKey: v.GetString("SERP_API_KEY"),
+	}
+
+	elasticEmail := ElasticEmailConfig{
+		APIKey: v.GetString("ELASTICEMAIL_API_KEY"),
+	}
 
 	config := &Config{
 		Server: ServerConfig{
@@ -712,6 +780,7 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 				CertFile: v.GetString("SSL_CERT_FILE"),
 				KeyFile:  v.GetString("SSL_KEY_FILE"),
 			},
+			FrontendUrl: v.GetString("FRONTEND_URL"),
 		},
 		Database:  dbConfig,
 		SMTP:      smtpConfig,
@@ -770,11 +839,6 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 			Interval: v.GetDuration("TASK_SCHEDULER_INTERVAL"),
 			MaxTasks: v.GetInt("TASK_SCHEDULER_MAX_TASKS"),
 		},
-		AutomationScheduler: AutomationSchedulerConfig{
-			Delay:     v.GetDuration("AUTOMATION_SCHEDULER_DELAY"),
-			Interval:  v.GetDuration("AUTOMATION_SCHEDULER_INTERVAL"),
-			BatchSize: v.GetInt("AUTOMATION_SCHEDULER_BATCH_SIZE"),
-		},
 
 		RootEmail:       rootEmail,
 		Environment:     v.GetString("ENVIRONMENT"),
@@ -784,6 +848,14 @@ func LoadWithOptions(opts LoadOptions) (*Config, error) {
 		Version:         v.GetString("VERSION"),
 		IsInstalled:     isInstalled,
 		EnvValues:       envVals, // Store env values for setup service
+		Google:          google,
+		Apple:           apple,
+		Stripe:          stripe,
+		Azure:           azure,
+		SERP:            serpConfig,
+		ElasticEmail:    elasticEmail,
+		AI:              ai,
+		LogPath:         v.GetString("LOG_PATH"),
 	}
 
 	if config.WebhookEndpoint == "" {
@@ -808,7 +880,7 @@ func (c *Config) IsProduction() bool {
 
 // GetEnvValues returns configuration values that came from actual environment variables
 // This is used by the setup service to determine which settings are already configured
-func (c *Config) GetEnvValues() (rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName string, smtpPort int, smtpUseTLS string, smtpRelayEnabled string, smtpRelayDomain, smtpRelayTLSCertBase64, smtpRelayTLSKeyBase64 string, smtpRelayPort int) {
+func (c *Config) GetEnvValues() (rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName string, smtpPort int, smtpRelayEnabled string, smtpRelayDomain, smtpRelayTLSCertBase64, smtpRelayTLSKeyBase64 string, smtpRelayPort int) {
 	return c.EnvValues.RootEmail,
 		c.EnvValues.APIEndpoint,
 		c.EnvValues.SMTPHost,
@@ -817,7 +889,6 @@ func (c *Config) GetEnvValues() (rootEmail, apiEndpoint, smtpHost, smtpUsername,
 		c.EnvValues.SMTPFromEmail,
 		c.EnvValues.SMTPFromName,
 		c.EnvValues.SMTPPort,
-		c.EnvValues.SMTPUseTLS,
 		c.EnvValues.SMTPRelayEnabled,
 		c.EnvValues.SMTPRelayDomain,
 		c.EnvValues.SMTPRelayTLSCertBase64,

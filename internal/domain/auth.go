@@ -3,6 +3,8 @@ package domain
 import (
 	"context"
 	"time"
+
+	"golang.org/x/oauth2"
 )
 
 //go:generate mockgen -destination mocks/mock_auth_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain AuthRepository
@@ -19,6 +21,11 @@ const WorkspaceIDKey ContextKey = "workspace_id"
 type AuthRepository interface {
 	GetSessionByID(ctx context.Context, sessionID string, userID string) (*time.Time, error)
 	GetUserByID(ctx context.Context, userID string) (*User, error)
+}
+
+type AuthTokenRepository interface {
+	UpdateTokens(ctx context.Context, userID string, token *oauth2.Token) error
+	GetTokens(ctx context.Context, userID string) (*oauth2.Token, error)
 }
 
 type AuthService interface {

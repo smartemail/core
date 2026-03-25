@@ -3,6 +3,8 @@ package domain
 import (
 	"context"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 //go:generate mockgen -destination mocks/mock_user_repository.go -package mocks github.com/Notifuse/notifuse/internal/domain UserRepository
@@ -48,6 +50,39 @@ type Session struct {
 	CreatedAt        time.Time  `json:"created_at" db:"created_at"`
 	MagicCode        *string    `json:"magic_code,omitempty" db:"magic_code"`
 	MagicCodeExpires *time.Time `json:"magic_code_expires,omitempty" db:"magic_code_expires_at"`
+}
+
+type GoogleUser struct {
+	Iss           string `json:"iss"`
+	Azp           string `json:"azp"`
+	Aud           string `json:"aud"`
+	Sub           string `json:"sub"`
+	Email         string `json:"email"`
+	EmailVerified string `json:"email_verified"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+	Locale        string `json:"locale"`
+	Iat           string `json:"iat"`
+	Exp           string `json:"exp"`
+}
+
+type AppleUser struct {
+	Email          string `json:"email"`
+	EmailVerified  string `json:"email_verified"`
+	IsPrivateEmail string `json:"is_private_email"`
+	Sub            string `json:"sub"`
+	AuthTime       int64  `json:"auth_time"`
+	jwt.RegisteredClaims
+}
+
+type AppleUserData struct {
+	Name struct {
+		FirstName string `json:"firstName"`
+		LastName  string `json:"lastName"`
+	} `json:"name"`
+	Email string `json:"email"`
 }
 
 type SignInInput struct {
