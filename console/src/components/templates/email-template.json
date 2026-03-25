@@ -1,0 +1,23 @@
+{
+  "emailTree": {
+    "id": "mjml-1",
+    "type": "mjml",
+    "children": [
+      {
+        "id": "body-1",
+        "type": "mj-body",
+        "children": []
+      }
+    ]
+  },
+  "testData": {
+    "contact": {
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "john.doe@example.com"
+    },
+    "unsubscribe_url": "https://localapi.notifuse.com:4000/unsubscribe?email={{ contact.email }}&lid={{ list.id }}&email_hmac={{ contact.hmac }}"
+  },
+  "exportedAt": "2025-06-17T19:30:11.378Z",
+  "version": "1.0"
+}

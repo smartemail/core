@@ -1,0 +1,70 @@
+import { useState, useEffect } from 'react'
+import { useParams, useSearch } from '@tanstack/react-router'
+import dayjs from 'dayjs'
+import { useAuth } from '../contexts/AuthContext'
+import { AnalyticsDashboard } from '../components/analytics/AnalyticsDashboard'
+import { getBrowserTimezone } from '../lib/timezoneNormalizer'
+import { useIsMobile } from '../hooks/useIsMobile'
+import type { AnalyticsSearch } from '../router'
+
+type TimePeriod = '7D' | '14D' | '30D' | '90D'
+
+export function AnalyticsPage() {
+  const { workspaceId } = useParams({ strict: false }) as { workspaceId: string }
+  const search = useSearch({ strict: false }) as AnalyticsSearch
+  const { workspaces } = useAuth()
+  const isMobile = useIsMobile()
+
+  const selectedPeriod = (search.period || '14D') as TimePeriod
+  const [selectedTimezone, setSelectedTimezone] = useState<string>('')
+
+  const workspace = workspaces.find((w) => w.id === workspaceId)
+
+  // Get browser timezone on component mount (normalized to canonical IANA name)
+  useEffect(() => {
+    const browserTimezone = getBrowserTimezone()
+    setSelectedTimezone(browserTimezone)
+  }, [])
+
+  // Calculate time range based on selected period
+  const getTimeRangeFromPeriod = (period: TimePeriod): [string, string] => {
+    const endDate = dayjs().add(1, 'day') // Use tomorrow instead of today
+    let startDate: dayjs.Dayjs
+
+    switch (period) {
+      case '7D':
+        startDate = endDate.subtract(7, 'days')
+        break
+      case '14D':
+        startDate = endDate.subtract(14, 'days')
+        break
+      case '30D':
+        startDate = endDate.subtract(30, 'days')
+        break
+      case '90D':
+        startDate = endDate.subtract(90, 'days')
+        break
+      default:
+        startDate = endDate.subtract(30, 'days')
+    }
+
+    return [startDate.format('YYYY-MM-DD'), endDate.format('YYYY-MM-DD')]
+  }
+
+  const timeRange = getTimeRangeFromPeriod(selectedPeriod)
+
+  if (!workspace) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center' }}>
+        <h2>Workspace not found</h2>
+        <p>The requested workspace could not be found.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex-1 overflow-auto" style={{ padding: isMobile ? '16px 16px 0' : '20px 20px 0' }}>
+      <AnalyticsDashboard workspace={workspace} timeRange={timeRange} timezone={selectedTimezone} />
+    </div>
+  )
+}
