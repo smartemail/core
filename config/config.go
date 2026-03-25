@@ -17,35 +17,42 @@ import (
 const VERSION = "43.0"
 
 type Config struct {
-	Server          ServerConfig
-	Database        DatabaseConfig
-	Security        SecurityConfig
-	Tracing         TracingConfig
-	SMTP            SMTPConfig
-	SMTPRelay       SMTPRelayConfig
-	Demo            DemoConfig
-	Broadcast       BroadcastConfig
-	TaskScheduler   TaskSchedulerConfig
-	Telemetry       bool
-	CheckForUpdates bool
-	RootEmail       string
-	Environment     string
-	APIEndpoint     string
-	WebhookEndpoint string
-	LogLevel        string
-	Version         string
-	IsInstalled     bool // NEW: Indicates if setup wizard has been completed
-	Google          GoogleConfig
-	Apple           AppleConfig
-	Stripe          StripeConfig
-	Azure           AzureConfig
-	AI              AiConfig
-	SERP            SERPConfig
-	ElasticEmail    ElasticEmailConfig
-	LogPath         string
+	Server              ServerConfig
+	Database            DatabaseConfig
+	Security            SecurityConfig
+	Tracing             TracingConfig
+	SMTP                SMTPConfig
+	SMTPRelay           SMTPRelayConfig
+	Demo                DemoConfig
+	Broadcast           BroadcastConfig
+	TaskScheduler       TaskSchedulerConfig
+	AutomationScheduler AutomationSchedulerConfig
+	Telemetry           bool
+	CheckForUpdates     bool
+	RootEmail           string
+	Environment         string
+	APIEndpoint         string
+	WebhookEndpoint     string
+	LogLevel            string
+	Version             string
+	IsInstalled         bool // NEW: Indicates if setup wizard has been completed
+	Google              GoogleConfig
+	Apple               AppleConfig
+	Stripe              StripeConfig
+	Azure               AzureConfig
+	AI                  AiConfig
+	SERP                SERPConfig
+	ElasticEmail        ElasticEmailConfig
+	LogPath             string
 
 	// Track which values came from actual environment variables (not database, not generated)
 	EnvValues EnvValues
+}
+
+type AutomationSchedulerConfig struct {
+	Delay     time.Duration // Delay before scheduler starts (default: 30s)
+	Interval  time.Duration // Polling interval (default: 10s)
+	BatchSize int           // Contacts per batch (default: 50)
 }
 
 // EnvValues tracks configuration that came from actual environment variables
@@ -63,6 +70,8 @@ type EnvValues struct {
 	SMTPRelayPort          int
 	SMTPRelayTLSCertBase64 string
 	SMTPRelayTLSKeyBase64  string
+	SMTPUseTLS             string // "true", "false", or "" (empty = not set)
+
 }
 
 type DemoConfig struct {
@@ -143,14 +152,15 @@ type TracingConfig struct {
 }
 
 type SMTPConfig struct {
-	Host      string
-	Port      int
-	Username  string
-	Password  string
-	FromEmail string
-	FromName  string
+	Host         string
+	Port         int
+	Username     string
+	Password     string
+	FromEmail    string
+	FromName     string
+	UseTLS       bool
+	EHLOHostname string
 }
-
 type SMTPRelayConfig struct {
 	Enabled       bool   // Enable SMTP relay server for receiving emails
 	Port          int    // Port to listen on (default: 587)
@@ -880,7 +890,7 @@ func (c *Config) IsProduction() bool {
 
 // GetEnvValues returns configuration values that came from actual environment variables
 // This is used by the setup service to determine which settings are already configured
-func (c *Config) GetEnvValues() (rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName string, smtpPort int, smtpRelayEnabled string, smtpRelayDomain, smtpRelayTLSCertBase64, smtpRelayTLSKeyBase64 string, smtpRelayPort int) {
+func (c *Config) GetEnvValues() (rootEmail, apiEndpoint, smtpHost, smtpUsername, smtpPassword, smtpFromEmail, smtpFromName string, smtpPort int, smtpUseTLS string, smtpRelayEnabled string, smtpRelayDomain, smtpRelayTLSCertBase64, smtpRelayTLSKeyBase64 string, smtpRelayPort int) {
 	return c.EnvValues.RootEmail,
 		c.EnvValues.APIEndpoint,
 		c.EnvValues.SMTPHost,
@@ -889,6 +899,7 @@ func (c *Config) GetEnvValues() (rootEmail, apiEndpoint, smtpHost, smtpUsername,
 		c.EnvValues.SMTPFromEmail,
 		c.EnvValues.SMTPFromName,
 		c.EnvValues.SMTPPort,
+		c.EnvValues.SMTPUseTLS,
 		c.EnvValues.SMTPRelayEnabled,
 		c.EnvValues.SMTPRelayDomain,
 		c.EnvValues.SMTPRelayTLSCertBase64,
